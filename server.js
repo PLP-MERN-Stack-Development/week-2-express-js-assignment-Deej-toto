@@ -7,12 +7,14 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.json());
 
+// Logger middleware
 function requestLogger(req, res, next) {
   console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
   next();
 }
 app.use(requestLogger);
 
+// Auth middleware
 function authMiddleware(req, res, next) {
   const key = req.header('x-api-key');
   if (key !== process.env.API_KEY) {
@@ -22,6 +24,7 @@ function authMiddleware(req, res, next) {
 }
 app.use('/api/products', authMiddleware);
 
+// In-memory products
 let products = [
   {
     id: '1',
@@ -49,6 +52,7 @@ let products = [
   }
 ];
 
+// Routes
 app.get('/', (req, res) => {
   res.send('Welcome to the Product API! Go to /api/products to see all products.');
 });
@@ -110,7 +114,8 @@ app.delete('/api/products/:id', (req, res) => {
   res.json(deleted);
 });
 
-app.use((err, req, res) => {
+// Error handler (must have 4 params)
+app.use((err, req, res, next) => {
   console.error(err.stack);
   res.status(err.status || 500).json({ error: err.message || 'Internal Server Error' });
 });
