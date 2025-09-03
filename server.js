@@ -1,18 +1,27 @@
-// server.js - Starter Express server for Week 2 assignment
-
-// Import required modules
+require('dotenv').config();
 const express = require('express');
-const bodyParser = require('body-parser');
 const { v4: uuidv4 } = require('uuid');
 
-// Initialize Express app
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware setup
-app.use(bodyParser.json());
+app.use(express.json());
 
-// Sample in-memory products database
+function requestLogger(req, res, next) {
+  console.log(`[${new Date().toISOString()}] ${req.method} ${req.originalUrl}`);
+  next();
+}
+app.use(requestLogger);
+
+function authMiddleware(req, res, next) {
+  const key = req.header('x-api-key');
+  if (key !== process.env.API_KEY) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+  next();
+}
+app.use('/api/products', authMiddleware);
+
 let products = [
   {
     id: '1',
@@ -40,32 +49,74 @@ let products = [
   }
 ];
 
-// Root route
 app.get('/', (req, res) => {
   res.send('Welcome to the Product API! Go to /api/products to see all products.');
 });
 
-// TODO: Implement the following routes:
-// GET /api/products - Get all products
-// GET /api/products/:id - Get a specific product
-// POST /api/products - Create a new product
-// PUT /api/products/:id - Update a product
-// DELETE /api/products/:id - Delete a product
-
-// Example route implementation for GET /api/products
 app.get('/api/products', (req, res) => {
   res.json(products);
 });
 
-// TODO: Implement custom middleware for:
-// - Request logging
-// - Authentication
-// - Error handling
-
-// Start the server
-app.listen(PORT, () => {
-  console.log(`Server is running on http://localhost:${PORT}`);
+app.get('/api/products/:id', (req, res) => {
+  const product = products.find(p => p.id === req.params.id);
+  if (!product) {
+    return res.status(404).json({ error: 'Product not found' });
+  }
+  res.json(product);
 });
 
-// Export the app for testing purposes
-module.exports = app; 
+app.post('/api/products', (req, res) => {
+  const { name, description, price, category, inStock } = req.body;
+  if (!name || price == null) {
+    return res.status(400).json({ error: 'Name and price are required' });
+  }
+  const newProduct = {
+    id: uuidv4(),
+    name,
+    description: description || '',
+    price,
+    category: category || '',
+    inStock: inStock != null ? inStock : true
+  };
+  products.push(newProduct);
+  res.status(201).json(newProduct);
+});
+
+app.put('/api/products/:id', (req, res) => {
+  const idx = products.findIndex(p => p.id === req.params.id);
+  if (idx === -1) {
+    return res.status(404).json({ error: 'Product not found' });
+  }
+  const { name, description, price, category, inStock } = req.body;
+  const existing = products[idx];
+  const updated = {
+    ...existing,
+    name: name != null ? name : existing.name,
+    description: description != null ? description : existing.description,
+    price: price != null ? price : existing.price,
+    category: category != null ? category : existing.category,
+    inStock: inStock != null ? inStock : existing.inStock
+  };
+  products[idx] = updated;
+  res.json(updated);
+});
+
+app.delete('/api/products/:id', (req, res) => {
+  const idx = products.findIndex(p => p.id === req.params.id);
+  if (idx === -1) {
+    return res.status(404).json({ error: 'Product not found' });
+  }
+  const [deleted] = products.splice(idx, 1);
+  res.json(deleted);
+});
+
+app.use((err, req, res) => {
+  console.error(err.stack);
+  res.status(err.status || 500).json({ error: err.message || 'Internal Server Error' });
+});
+
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
+});
+
+module.exports = app;
